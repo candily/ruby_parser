@@ -637,6 +637,7 @@ module RubyParserStuff
     end
 
     args.line line
+    result.endline = result.line
     result.line = line
     result.comments = self.comments.pop
 
@@ -657,6 +658,7 @@ module RubyParserStuff
       end
     end
 
+    result.endline = result.line
     result.line = recv.line
     result.comments = self.comments.pop
     result
