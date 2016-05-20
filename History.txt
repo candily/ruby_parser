@@ -1,3 +1,38 @@
+=== 3.8.2 / 2016-05-05
+
+* 2 bug fixes:
+
+  * Fixed lex_state in interpolated strings. (whitequark)
+  * Fixed safe operator for newline/semicolon contexts. (presidentbeef)
+
+=== 3.8.1 / 2016-02-19
+
+* 1 bug fix:
+
+  * Fixed problems with tLONELY in mlhs_node.
+
+=== 3.8.0 / 2016-02-18
+
+* 1 major enhancement:
+
+  * Added support for Ruby 2.3.0 and the &. operator. (presidentbeef)
+
+* 2 minor enhancements:
+
+  * Add support for safe attr assign. (presidentbeef)
+  * Added support for safe call. (presidentbeef)
+
+* 1 bug fix:
+
+  * Fixed parsing of { 'a': :b }. (presidentbeef)
+
+=== 3.7.3 / 2016-01-21
+
+* 2 bug fixes:
+
+  * Fixed parsing kwargs in defs with no parens. (presidentbeef)
+  * defs should have a nil node if body is empty.
+
 === 3.7.2 / 2015-10-26
 
 * 1 bug fix:

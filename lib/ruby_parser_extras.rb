@@ -91,7 +91,7 @@ class RPStringScanner < StringScanner
 end
 
 module RubyParserStuff
-  VERSION = "3.7.2" unless constants.include? "VERSION" # SIGH
+  VERSION = "3.8.2" unless constants.include? "VERSION" # SIGH
 
   attr_accessor :lexer, :in_def, :in_single, :file
   attr_reader :env, :comments
@@ -557,8 +557,15 @@ module RubyParserStuff
     end
   end
 
-  def new_call recv, meth, args = nil
-    result = s(:call, recv, meth)
+  def new_call recv, meth, args = nil, call_op = :'.'
+    result = case call_op.to_sym
+             when :'.'
+               s(:call, recv, meth)
+             when :'&.'
+               s(:safe_call, recv, meth)
+             else
+               raise "unknown call operator: `#{type.inspect}`"
+             end
 
     # TODO: need a test with f(&b) to produce block_pass
     # TODO: need a test with f(&b) { } to produce warning
@@ -574,6 +581,22 @@ module RubyParserStuff
     line = result.grep(Sexp).map(&:line).compact.min
     result.line = line if line
 
+    result
+  end
+
+  def new_attrasgn recv, meth, call_op
+    meth = :"#{meth}="
+
+    result = case call_op.to_sym
+             when :'.'
+               s(:attrasgn, recv, meth)
+             when :'&.'
+               s(:safe_attrasgn, recv, meth)
+             else
+               raise "unknown call operator: `#{type.inspect}`"
+             end
+
+    result.line = recv.line
     result
   end
 
@@ -744,6 +767,23 @@ module RubyParserStuff
                lhs
              end
     result.line = lhs.line
+    result
+  end
+
+  def new_op_asgn2 val
+    recv, call_op, meth, op, arg = val
+    meth = :"#{meth}="
+
+    result = case call_op.to_sym
+             when :'.'
+               s(:op_asgn2, recv, meth, op.to_sym, arg)
+             when :'&.'
+               s(:safe_op_asgn2, recv, meth, op.to_sym, arg)
+             else
+               raise "unknown call operator: `#{type.inspect}`"
+             end
+
+    result.line = recv.line
     result
   end
 
@@ -934,7 +974,7 @@ module RubyParserStuff
     rhs = value_expr rhs
 
     case lhs[0]
-    when :lasgn, :iasgn, :cdecl, :cvdecl, :gasgn, :cvasgn, :attrasgn then
+    when :lasgn, :iasgn, :cdecl, :cvdecl, :gasgn, :cvasgn, :attrasgn, :safe_attrasgn then
       lhs << rhs
     when :const then
       lhs[0] = :cdecl
@@ -1322,6 +1362,10 @@ module RubyParserStuff
   end
 end
 
+class Ruby23Parser < Racc::Parser
+  include RubyParserStuff
+end
+
 class Ruby22Parser < Racc::Parser
   include RubyParserStuff
 end
@@ -1356,11 +1400,12 @@ class RubyParser
     @p20 = Ruby20Parser.new
     @p21 = Ruby21Parser.new
     @p22 = Ruby22Parser.new
+    @p23 = Ruby23Parser.new
   end
 
   def process s, f = "(string)", t = 10
     e = nil
-    [@p22, @p21, @p20, @p19, @p18].each do |parser|
+    [@p23, @p22, @p21, @p20, @p19, @p18].each do |parser|
       begin
         return parser.process s, f, t
       rescue Racc::ParseError, RubyParser::SyntaxError => exc
@@ -1378,6 +1423,7 @@ class RubyParser
     @p20.reset
     @p21.reset
     @p22.reset
+    @p23.reset
   end
 
   def self.for_current_ruby
@@ -1392,6 +1438,8 @@ class RubyParser
       Ruby21Parser.new
     when /^2.2/ then
       Ruby22Parser.new
+    when /^2.3/ then
+      Ruby23Parser.new
     else
       raise "unrecognized RUBY_VERSION #{RUBY_VERSION}"
     end

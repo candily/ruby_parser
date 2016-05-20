@@ -961,6 +961,10 @@ module TestRubyParserShared
     Ruby22Parser === self.processor
   end
 
+  def ruby23
+    Ruby23Parser === self.processor
+  end
+
   def test_bug_comma
     val = if ruby18 then
             s(:lit, 100)
@@ -1016,7 +1020,7 @@ module TestRubyParserShared
     rb = "not(a)"
     pt = if ruby18 then
            s(:not, s(:call, nil, :a))
-         elsif ruby19 or ruby20 or ruby21 or ruby22 then
+         elsif ruby19 or ruby20 or ruby21 or ruby22 or ruby23 then
            s(:call, s(:call, nil, :a), :"!")
          else
            raise "wtf"
@@ -1393,6 +1397,19 @@ module TestRubyParserShared
   def test_qwords_empty
     rb = "%w()"
     pt = s(:array)
+
+    assert_parse rb, pt
+  end
+
+  def test_qwords_line_breaks
+    skip "not yet"
+
+    rb = "%w(\na\nb\n)\n1"
+    pt = s(:block,
+           s(:array,
+             s(:str, "a").line(2),
+             s(:str, "b").line(3)).line(1),
+           s(:lit, 1).line(5))
 
     assert_parse rb, pt
   end
@@ -2188,6 +2205,13 @@ module TestRubyParserShared20to22
     rb = "def test(**testing) test_splat(**testing) end"
     pt = s(:defn, :test, s(:args, :"**testing"),
            s(:call, nil, :test_splat, s(:hash, s(:kwsplat, s(:lvar, :testing)))))
+
+    assert_parse rb, pt
+  end
+
+  def test_dstr_lex_state
+    rb = '"#{p:a}"'
+    pt = s(:dstr, "", s(:evstr, s(:call, nil, :p, s(:lit, :a))))
 
     assert_parse rb, pt
   end
@@ -3384,9 +3408,106 @@ class TestRuby22Parser < RubyParserTestCase
     rb = "a ? \"\": b"
     assert_parse rb, pt
   end
+
+  def test_quoted_symbol_keys
+    rb = "{ 'a': :b }"
+    pt = s(:hash, s(:lit, :a), s(:lit, :b))
+
+    assert_parse rb, pt
+  end
+
+  def test_quoted_symbol_hash_arg
+    rb = "puts 'a': {}"
+    pt = s(:call, nil, :puts, s(:hash, s(:lit, :a), s(:hash)))
+
+    assert_parse rb, pt
+  end
 end
 
-[18, 19, 20, 21, 22].each do |v|
+class TestRuby23Parser < RubyParserTestCase
+  include TestRubyParserShared
+  include TestRubyParserShared19to22
+  include TestRubyParserShared20to22
+
+  def setup
+    super
+
+    self.processor = Ruby23Parser.new
+  end
+
+  def test_safe_call
+    rb = "a&.b"
+    pt = s(:safe_call, s(:call, nil, :a), :b)
+
+    assert_parse rb, pt
+  end
+
+  def test_safe_call_newline
+    rb = "a&.b\n"
+    pt = s(:safe_call, s(:call, nil, :a), :b)
+
+    assert_parse rb, pt
+  end
+
+  def test_safe_call_rhs_newline
+    rb = "c = a&.b\n"
+    pt = s(:lasgn, :c, s(:safe_call, s(:call, nil, :a), :b))
+
+    assert_parse rb, pt
+  end
+
+  def test_safe_calls
+    rb = "a&.b&.c(1)"
+    pt = s(:safe_call, s(:safe_call, s(:call, nil, :a), :b), :c, s(:lit, 1))
+
+    assert_parse rb, pt
+  end
+
+  def test_safe_attrasgn
+    rb = "a&.b = 1"
+    pt = s(:safe_attrasgn, s(:call, nil, :a), :"b=", s(:lit, 1))
+
+    assert_parse rb, pt
+  end
+
+  def test_safe_attrasgn_constant
+    rb = "a&.B = 1"
+    pt = s(:safe_attrasgn, s(:call, nil, :a), :"B=", s(:lit, 1))
+
+    assert_parse rb, pt
+  end
+
+  def test_safe_call_dot_parens
+    rb = "a&.()"
+    pt = s(:safe_call, s(:call, nil, :a), :call)
+
+    assert_parse rb, pt
+  end
+
+  def test_safe_call_operator
+    rb = "a&.> 1"
+    pt = s(:safe_call, s(:call, nil, :a), :>, s(:lit, 1)).line(1)
+
+    assert_parse rb, pt
+  end
+
+  def test_safe_op_asgn
+    rb = "a&.b += x 1\n"
+    pt = s(:safe_op_asgn, s(:call, nil, :a), s(:call, nil, :x, s(:lit, 1)), :b, :+).line(1)
+
+    assert_parse rb, pt
+  end
+
+  def test_safe_op_asgn2
+    rb = "a&.b ||=\nx;"
+    pt = s(:safe_op_asgn2, s(:call, nil, :a), :b=, :"||", s(:call, nil, :x)).line(1)
+
+    assert_parse rb, pt
+  end
+end
+
+
+[18, 19, 20, 21, 22, 23].each do |v|
   describe "block args arity #{v}" do
     attr_accessor :parser
 

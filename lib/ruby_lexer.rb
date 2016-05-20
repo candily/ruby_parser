@@ -680,9 +680,9 @@ class RubyLexer
   end
 
   def process_label text
-    result = process_symbol text
-    result[0] = :tLABEL
-    result
+    symbol = text[1..-3].gsub(ESC) { unescape $1 }
+
+    result(:expr_labelarg, :tLABEL, [symbol, self.lineno])
   end
 
   def process_token text
@@ -1074,7 +1074,8 @@ class RubyLexer
   end
 
   def ruby22?
-    Ruby22Parser === parser
+    Ruby22Parser === parser or
+      Ruby23Parser === parser
   end
 
   def process_string # TODO: rewrite / remove

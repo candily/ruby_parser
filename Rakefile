@@ -31,6 +31,8 @@ Hoe.spec "ruby_parser" do
     self.perforce_ignore << "lib/ruby21_parser.y"
     self.perforce_ignore << "lib/ruby22_parser.rb"
     self.perforce_ignore << "lib/ruby22_parser.y"
+    self.perforce_ignore << "lib/ruby23_parser.rb"
+    self.perforce_ignore << "lib/ruby23_parser.y"
     self.perforce_ignore << "lib/ruby_lexer.rex.rb"
   end
 
@@ -38,22 +40,28 @@ Hoe.spec "ruby_parser" do
 end
 
 file "lib/ruby20_parser.y" => "lib/ruby_parser.yy" do |t|
-  sh "unifdef -tk -DRUBY20 -URUBY21 -URUBY22 -UDEAD #{t.source} > #{t.name} || true"
+  sh "unifdef -tk -DRUBY20 -URUBY21 -URUBY22 -URUBY23 -UDEAD #{t.source} > #{t.name} || true"
 end
 
 file "lib/ruby21_parser.y" => "lib/ruby_parser.yy" do |t|
-  sh "unifdef -tk -URUBY20 -DRUBY21 -URUBY22 -UDEAD #{t.source} > #{t.name} || true"
+  sh "unifdef -tk -URUBY20 -DRUBY21 -URUBY22 -URUBY23 -UDEAD #{t.source} > #{t.name} || true"
 end
 
 file "lib/ruby22_parser.y" => "lib/ruby_parser.yy" do |t|
-  sh "unifdef -tk -URUBY20 -URUBY21 -DRUBY22 -UDEAD #{t.source} > #{t.name} || true"
+  sh "unifdef -tk -URUBY20 -URUBY21 -DRUBY22 -URUBY23 -UDEAD #{t.source} > #{t.name} || true"
 end
+
+file "lib/ruby23_parser.y" => "lib/ruby_parser.yy" do |t|
+  sh "unifdef -tk -URUBY20 -URUBY21 -URUBY22 -DRUBY23 -UDEAD #{t.source} > #{t.name} || true"
+end
+
 
 file "lib/ruby18_parser.rb" => "lib/ruby18_parser.y"
 file "lib/ruby19_parser.rb" => "lib/ruby19_parser.y"
 file "lib/ruby20_parser.rb" => "lib/ruby20_parser.y"
 file "lib/ruby21_parser.rb" => "lib/ruby21_parser.y"
 file "lib/ruby22_parser.rb" => "lib/ruby22_parser.y"
+file "lib/ruby23_parser.rb" => "lib/ruby23_parser.y"
 file "lib/ruby_lexer.rex.rb" => "lib/ruby_lexer.rex"
 
 task :clean do
@@ -99,7 +107,7 @@ task :isolate => :phony
 # 2) YFLAGS="-r all" make parse.c
 # 3) mv y.output parseXX.output
 
-%w[18 19 20 21 22].each do |v|
+%w[18 19 20 21 22 23].each do |v|
   task "compare#{v}" do
     sh "./yack.rb lib/ruby#{v}_parser.output > racc#{v}.txt"
     sh "./yack.rb parse#{v}.output > yacc#{v}.txt"
@@ -110,7 +118,7 @@ task :isolate => :phony
 end
 
 task :debug => :isolate do
-  ENV["V"] ||= "22"
+  ENV["V"] ||= "23"
   Rake.application[:parser].invoke # this way we can have DEBUG set
   Rake.application[:lexer].invoke # this way we can have DEBUG set
 
@@ -129,6 +137,8 @@ task :debug => :isolate do
              Ruby21Parser.new
            when "22" then
              Ruby22Parser.new
+           when "23" then
+             Ruby23Parser.new
            else
              raise "Unsupported version #{ENV["V"]}"
            end

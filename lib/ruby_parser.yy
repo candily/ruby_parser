@@ -6,6 +6,8 @@ class Ruby20Parser
 class Ruby21Parser
 #elif defined(RUBY22)
 class Ruby22Parser
+#elif defined(RUBY23)
+class Ruby23Parser
 #endif
 
 token kCLASS kMODULE kDEF kUNDEF kBEGIN kRESCUE kENSURE kEND kIF kUNLESS
@@ -25,11 +27,14 @@ token kCLASS kMODULE kDEF kUNDEF kBEGIN kRESCUE kENSURE kEND kIF kUNLESS
       tWORDS_BEG tQWORDS_BEG tSTRING_DBEG tSTRING_DVAR tSTRING_END
       tSTRING tSYMBOL tNL tEH tCOLON tCOMMA tSPACE tSEMI tLAMBDA
       tLAMBEG tDSTAR tCHAR tSYMBOLS_BEG tQSYMBOLS_BEG tSTRING_DEND tUBANG
-#if defined(RUBY21) || defined(RUBY22)
+#if defined(RUBY21) || defined(RUBY22) || defined(RUBY23))
       tRATIONAL tIMAGINARY
 #endif
-#if defined(RUBY22)
+#if defined(RUBY22 || defined(RUBY23))
       tLABEL_END
+#endif
+#if defined(RUBY23)
+       tLONELY
 #endif
 
 prechigh
@@ -190,13 +195,21 @@ rule
                     {
                       result = s(:op_asgn1, val[0], val[2], val[4].to_sym, val[5])
                     }
-                | primary_value tDOT tIDENTIFIER tOP_ASGN command_call
+                | primary_value call_op tIDENTIFIER tOP_ASGN command_call
                     {
                       result = s(:op_asgn, val[0], val[4], val[2].to_sym, val[3].to_sym)
+                      if val[1] == '&.'
+                        result[0] = :safe_op_asgn
+                      end
+                      result.line = val[0].line
                     }
-                | primary_value tDOT tCONSTANT tOP_ASGN command_call
+                | primary_value call_op tCONSTANT tOP_ASGN command_call
                     {
                       result = s(:op_asgn, val[0], val[4], val[2].to_sym, val[3].to_sym)
+                      if val[1] == '&.'
+                        result[0] = :safe_op_asgn
+                      end
+                      result.line = val[0].line
                     }
                 | primary_value tCOLON2 tCONSTANT tOP_ASGN command_call
                     {
@@ -222,7 +235,7 @@ rule
                       result = new_masgn val[0], val[2], :wrap
                     }
                 | mlhs tEQL mrhs
-#elif defined(RUBY21) || defined(RUBY22)
+#elif defined(RUBY21) || defined(RUBY22 || defined(RUBY23))
                 | mlhs tEQL mrhs_arg
 #endif
                     {
@@ -308,14 +321,14 @@ rule
                         result.insert 1, operation
                       end
                     }
-                | primary_value tDOT operation2 command_args =tLOWEST
+                | primary_value call_op operation2 command_args =tLOWEST
                     {
-                      result = new_call val[0], val[2].to_sym, val[3]
+                      result = new_call val[0], val[2].to_sym, val[3], val[1]
                     }
-                | primary_value tDOT operation2 command_args cmd_brace_block
+                | primary_value call_op operation2 command_args cmd_brace_block
                     {
                       recv, _, msg, args, block = val
-                      call = new_call recv, msg.to_sym, args
+                      call = new_call recv, msg.to_sym, args, val[1]
 
                       block_dup_check call, block
 
@@ -457,17 +470,17 @@ rule
                     {
                       result = self.aryset val[0], val[2]
                     }
-                | primary_value tDOT tIDENTIFIER
+                | primary_value call_op tIDENTIFIER
                     {
-                      result = s(:attrasgn, val[0], :"#{val[2]}=")
+                      result = new_attrasgn val[0], val[2], val[1]
                     }
                 | primary_value tCOLON2 tIDENTIFIER
                     {
                       result = s(:attrasgn, val[0], :"#{val[2]}=")
                     }
-                | primary_value tDOT tCONSTANT
+                | primary_value call_op tCONSTANT
                     {
-                      result = s(:attrasgn, val[0], :"#{val[2]}=")
+                      result = new_attrasgn val[0], val[2], val[1]
                     }
                 | primary_value tCOLON2 tCONSTANT
                     {
@@ -505,17 +518,17 @@ rule
                     {
                       result = self.aryset val[0], val[2]
                     }
-                | primary_value tDOT tIDENTIFIER # REFACTOR
+                | primary_value call_op tIDENTIFIER # REFACTOR
                     {
-                      result = s(:attrasgn, val[0], :"#{val[2]}=")
+                      result = new_attrasgn val[0], val[2], val[1]
                     }
                 | primary_value tCOLON2 tIDENTIFIER
                     {
                       result = s(:attrasgn, val[0], :"#{val[2]}=")
                     }
-                | primary_value tDOT tCONSTANT # REFACTOR?
+                | primary_value call_op tCONSTANT # REFACTOR?
                     {
-                      result = s(:attrasgn, val[0], :"#{val[2]}=")
+                      result = new_attrasgn val[0], val[2], val[1]
                     }
                 | primary_value tCOLON2 tCONSTANT
                     {
@@ -635,13 +648,13 @@ rule
                       val[2][0] = :arglist if val[2]
                       result = s(:op_asgn1, val[0], val[2], val[4].to_sym, val[5])
                     }
-                | primary_value tDOT tIDENTIFIER tOP_ASGN arg
+                | primary_value call_op tIDENTIFIER tOP_ASGN arg
                     {
-                      result = s(:op_asgn2, val[0], :"#{val[2]}=", val[3].to_sym, val[4])
+                      result = new_op_asgn2 val
                     }
-                | primary_value tDOT tCONSTANT tOP_ASGN arg
+                | primary_value call_op tCONSTANT tOP_ASGN arg
                     {
-                      result = s(:op_asgn2, val[0], :"#{val[2]}=", val[3].to_sym, val[4])
+                      result = new_op_asgn2 val
                     }
                 | primary_value tCOLON2 tIDENTIFIER tOP_ASGN arg
                     {
@@ -707,7 +720,7 @@ rule
                       result = new_call(new_call(s(:lit, val[1]), :"**", argl(val[3])), :"-@")
                     }
                 | tUMINUS_NUM tFLOAT tPOW arg
-#elif defined(RUBY21) || defined(RUBY22)
+#elif defined(RUBY21) || defined(RUBY22 || defined(RUBY23))
                 | tUMINUS_NUM simple_numeric tPOW arg
 #endif
                     {
@@ -926,7 +939,7 @@ rule
                       result = self.list_append val[0], s(:splat, val[3])
                     }
 
-#if defined(RUBY21) || defined(RUBY22)
+#if defined(RUBY21) || defined(RUBY22 || defined(RUBY23))
         mrhs_arg: mrhs
                     {
                       result = new_masgn_arg val[0]
@@ -1570,9 +1583,9 @@ opt_block_args_tail: tCOMMA block_args_tail
                       args = self.call_args val[2..-1]
                       result = val[0].concat args[1..-1]
                     }
-                | primary_value tDOT operation2 opt_paren_args
+                | primary_value call_op operation2 opt_paren_args
                     {
-                      result = new_call val[0], val[2].to_sym, val[3]
+                      result = new_call val[0], val[2].to_sym, val[3], val[1]
                     }
                 | primary_value tCOLON2 operation2 paren_args
                     {
@@ -1582,9 +1595,9 @@ opt_block_args_tail: tCOMMA block_args_tail
                     {
                       result = new_call val[0], val[2].to_sym
                     }
-                | primary_value tDOT paren_args
+                | primary_value call_op paren_args
                     {
-                      result = new_call val[0], :call, val[2]
+                      result = new_call val[0], :call, val[2], val[1]
                     }
                 | primary_value tCOLON2 paren_args
                     {
@@ -1861,7 +1874,7 @@ regexp_contents: none
                       result = lexer.lex_strterm
 
                       lexer.lex_strterm = nil
-                      lexer.lex_state = :expr_beg
+                      lexer.lex_state = :expr_beg # TODO: expr_value ?
                     }
                     string_dvar
                     {
@@ -1882,13 +1895,13 @@ regexp_contents: none
                       lexer.brace_nest  = 0
                       lexer.string_nest = 0
 
-                      lexer.lex_state   = :expr_beg
+                      lexer.lex_state   = :expr_value
                     }
                     compstmt tRCURLY
                     {
 #if defined(RUBY20)
                       # TODO: tRCURLY -> tSTRING_DEND
-#elif defined(RUBY21) || defined(RUBY22)
+#elif defined(RUBY21) || defined(RUBY22 || defined(RUBY23))
                       # TODO: tRCURLY -> tSTRING_END
 #endif
                       _, memo, stmt, _ = val
@@ -1960,7 +1973,7 @@ regexp_contents: none
          numeric: tINTEGER
                 | tFLOAT
                 | tUMINUS_NUM tINTEGER =tLOWEST
-#elif defined(RUBY21) || defined(RUBY22)
+#elif defined(RUBY21) || defined(RUBY22 || defined(RUBY23))
          numeric: simple_numeric
                 | tUMINUS_NUM simple_numeric
 #endif
@@ -1974,7 +1987,7 @@ regexp_contents: none
 #endif
                     }
 
-#if defined(RUBY21) || defined(RUBY22)
+#if defined(RUBY21) || defined(RUBY22) || defined(RUBY23))
   simple_numeric: tINTEGER
                 | tFLOAT
                 | tRATIONAL
@@ -2173,7 +2186,7 @@ keyword_variable: kNIL      { result = s(:nil)   }
                       result = identifier
                     }
 
-#if defined(RUBY22)
+#if defined(RUBY22) || defined(RUBY23))
       f_arg_asgn: f_norm_arg
 
       f_arg_item: f_arg_asgn
@@ -2217,7 +2230,7 @@ keyword_variable: kNIL      { result = s(:nil)   }
 
 #if defined(RUBY20)
             f_kw: tLABEL arg_value
-#elif defined(RUBY21) || defined(RUBY22)
+#elif defined(RUBY21) || defined(RUBY22) || defined(RUBY23)
          f_label: tLABEL
 
             f_kw: f_label arg_value
@@ -2230,7 +2243,7 @@ keyword_variable: kNIL      { result = s(:nil)   }
 
                       result = s(:array, s(:kwarg, identifier, val[1]))
                     }
-#if defined(RUBY21) || defined(RUBY22)
+#if defined(RUBY21) || defined(RUBY22) || defined(RUBY23)
                 | f_label
                     {
                       label, _ = val[0] # TODO: fix lineno?
@@ -2243,7 +2256,7 @@ keyword_variable: kNIL      { result = s(:nil)   }
 
 #if defined(RUBY20)
       f_block_kw: tLABEL primary_value
-#elif defined(RUBY21) || defined(RUBY22)
+#elif defined(RUBY21) || defined(RUBY22) || defined(RUBY23)
       f_block_kw: f_label primary_value
 #endif
                     {
@@ -2254,7 +2267,7 @@ keyword_variable: kNIL      { result = s(:nil)   }
 
                       result = s(:array, s(:kwarg, identifier, val[1]))
                     }
-#if defined(RUBY21) || defined(RUBY22)
+#if defined(RUBY21) || defined(RUBY22) || defined(RUBY23)
                 | f_label
                     {
                       label, _ = val[0] # TODO: fix lineno?
@@ -2294,7 +2307,7 @@ keyword_variable: kNIL      { result = s(:nil)   }
            f_opt: tIDENTIFIER tEQL arg_value
 #elif defined(RUBY21)
            f_opt: f_norm_arg tEQL arg_value
-#elif defined(RUBY22)
+#elif defined(RUBY22) || defined(RUBY23)
            f_opt: f_arg_asgn tEQL arg_value
 #endif
                     {
@@ -2306,7 +2319,7 @@ keyword_variable: kNIL      { result = s(:nil)   }
      f_block_opt: tIDENTIFIER tEQL primary_value
 #elif defined(RUBY21)
      f_block_opt: f_norm_arg tEQL primary_value
-#elif defined(RUBY22)
+#elif defined(RUBY22) || defined(RUBY23)
      f_block_opt: f_arg_asgn tEQL primary_value
 #endif
                     {
@@ -2407,7 +2420,7 @@ keyword_variable: kNIL      { result = s(:nil)   }
                     {
                       result = s(:array, s(:lit, val[0][0].to_sym), val[1])
                     }
-#if defined(RUBY22)
+#if defined(RUBY22) || defined(RUBY23)
                 | tSTRING_BEG string_contents tLABEL_END arg_value
                     {
                       _, sym, _, value = val
@@ -2429,6 +2442,10 @@ keyword_variable: kNIL      { result = s(:nil)   }
       operation2: tIDENTIFIER | tCONSTANT | tFID | op
       operation3: tIDENTIFIER | tFID | op
     dot_or_colon: tDOT | tCOLON2
+         call_op: tDOT
+#if defined(RUBY23)
+                | tLONELY
+#endif
        opt_terms:  | terms
           opt_nl:  | tNL
           rparen: opt_nl tRPAREN

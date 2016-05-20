@@ -61,7 +61,7 @@ rule
 | bol?          /\=begin(?=\s)/         process_begin
 |               /\=(?=begin\b)/         { result arg_state, TOKENS[text], text }
 
-ruby22_label?   /\"(#{SIMPLE_STRING})\":/o process_label
+ruby22_label?   /\"#{SIMPLE_STRING}\":/o process_label
                 /\"(#{SIMPLE_STRING})\"/o { result :expr_end, :tSTRING, text[1..-2].gsub(ESC) { unescape $1 } }
                 /\"/                    { string STR_DQUOTE; result nil, :tSTRING_BEG, text }
 
@@ -133,6 +133,7 @@ was_label?        /\'#{SSTRING}\':?/o   process_label_or_string
 |               /\&\&\=/                { result(:expr_beg, :tOP_ASGN, "&&") }
 |               /\&\&/                  { result(:expr_beg, :tANDOP,   "&&") }
 |               /\&\=/                  { result(:expr_beg, :tOP_ASGN, "&" ) }
+|               /\&\./                  { result(:expr_dot, :tLONELY,  "&.") }
 |               /\&/                    process_amper
 
                 /\//                    process_slash

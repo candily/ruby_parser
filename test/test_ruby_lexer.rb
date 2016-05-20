@@ -245,6 +245,21 @@ class TestRubyLexer < Minitest::Test
     assert_lex3("&&=", nil, :tOP_ASGN, "&&", :expr_beg)
   end
 
+  def test_yylex_and_dot
+    setup_lexer_class Ruby23Parser
+
+    assert_lex3("&.", nil, :tLONELY, "&.", :expr_dot)
+  end
+
+  def test_yylex_and_dot_call
+    setup_lexer_class Ruby23Parser
+
+    assert_lex3("x&.y", nil,
+                :tIDENTIFIER, "x", :expr_cmdarg,
+                :tLONELY, "&.", :expr_dot,
+                :tIDENTIFIER, "y")
+  end
+
   def test_yylex_and_arg
     self.lex_state = :expr_arg
 
@@ -2653,10 +2668,34 @@ class TestRubyLexer < Minitest::Test
     assert_lex("{'a':1}",
                s(:hash, s(:lit, :a), s(:lit, 1)),
 
-               :tLBRACE, "{", :expr_beg,    0, 1,
-               :tLABEL,  "a", :expr_end,    0, 1,
-               :tINTEGER, 1,  :expr_end,    0, 1,
-               :tRCURLY, "}", :expr_endarg, 0, 0)
+               :tLBRACE, "{", :expr_beg,      0, 1,
+               :tLABEL,  "a", :expr_labelarg, 0, 1,
+               :tINTEGER, 1,  :expr_end,      0, 1,
+               :tRCURLY, "}", :expr_endarg,   0, 0)
+  end
+
+  def test_yylex_hash_colon_quoted_symbol_22
+    setup_lexer_class Ruby22Parser
+
+    assert_lex("{'abc': :b}",
+               s(:hash, s(:lit, :abc), s(:lit, :b)),
+
+               :tLBRACE, "{", :expr_beg,      0, 1,
+               :tLABEL,  "abc", :expr_labelarg, 0, 1,
+               :tSYMBOL, "b",  :expr_end,     0, 1,
+               :tRCURLY, "}", :expr_endarg,   0, 0)
+  end
+
+  def test_yylex_hash_colon_double_quoted_symbol_22
+    setup_lexer_class Ruby22Parser
+
+    assert_lex('{"abc": :b}',
+               s(:hash, s(:lit, :abc), s(:lit, :b)),
+
+               :tLBRACE, "{", :expr_beg,      0, 1,
+               :tLABEL,  "abc", :expr_labelarg, 0, 1,
+               :tSYMBOL, "b",  :expr_end,     0, 1,
+               :tRCURLY, "}", :expr_endarg,   0, 0)
   end
 
   def test_ruby21_new_numbers
