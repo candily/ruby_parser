@@ -1138,7 +1138,7 @@ module RubyParserStuff
     Timeout.timeout time do
       raise "bad val: #{str.inspect}" unless String === str
 
-      str = handle_encoding str
+      str = handle_encoding str.gsub('\n', ' ')
 
       self.file = file.dup
 
